@@ -1,5 +1,4 @@
 from pydantic import BaseModel, Field
-from typing import List
 from datetime import datetime
 
 
@@ -15,7 +14,7 @@ class Commit(BaseModel):
 class GitHubData(BaseModel):
     """Complete GitHub data"""
 
-    commits: List[Commit]
+    commits: list[Commit]
     total_commits: int
     time_range: str
 
@@ -37,14 +36,29 @@ class Answer(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
+# Supermemory Models
+class MemoryMetadata(BaseModel):
+    """Required base schema for all memories (Supermemory principles)"""
+
+    type: str = Field(description="conversation | preference | note")
+    source: str = Field(description="discord | bot | manual")
+    created_by: str = Field(description="User ID")
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    sensitivity: str = Field(description="private | project | organization")
+
+    # Optional extended fields
+    commits_analyzed: int | None = None
+    tags: list[str] | None = None
+
+
 class MemoryEntry(BaseModel):
-    """Memory storage format"""
+    """Memory storage format with Supermemory principles"""
 
     user_id: str
-    question: str
-    answer: str
-    commits_analyzed: int
-    timestamp: datetime
+    content: str
+    container_tags: list[str]
+    metadata: MemoryMetadata
+    timestamp: datetime = Field(default_factory=datetime.now)
 
 
 class HealthCheck(BaseModel):
