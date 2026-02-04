@@ -12,6 +12,7 @@ A Discord bot demonstrating modern Python architecture using FastAPI, Pydantic, 
 3. **State Management** - LangGraph manages workflow state
 4. **Memory & Context** - Supermemory persists interactions
 5. **API-First Design** - FastAPI exposes all functionality
+6. **Professional Logging** - Structured logging for debugging and monitoring
 
 ### Technology Stack
 
@@ -25,6 +26,7 @@ A Discord bot demonstrating modern Python architecture using FastAPI, Pydantic, 
 | Supermemory | Cross-session memory |
 | Discord.py | User interaction |
 | Spec Kit | Spec-driven development |
+| Python Logging | Structured logging |
 
 ### Development Workflow
 
