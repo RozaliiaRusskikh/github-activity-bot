@@ -23,8 +23,27 @@ class MemoryService:
 
     def __init__(self):
         """Initialize mem0 with local storage"""
-        config = {"version": "v1.1"}
-        self.memory = Memory.from_config(config)
+        config = {
+            "version": "v1.1",
+            "embedder": {
+                "provider": "huggingface",
+                "config": {
+                    "model": "sentence-transformers/all-MiniLM-L6-v2"  # Free, fast model
+                },
+            },
+        }
+
+        try:
+            self.memory = Memory.from_config(config)
+            logger.info("Memory service initialized (mem0 with HuggingFace embeddings)")
+        except Exception as e:
+            logger.warning(
+                f"Failed to initialize with HuggingFace, trying simpler config: {e}"
+            )
+            # Fallback to basic config
+            config = {"version": "v1.1"}
+            self.memory = Memory.from_config(config)
+            logger.info("Memory service initialized (mem0 with default embeddings)")
 
         # Initialize LLM for content filtering (Layer 2)
         self.filter_llm = ChatGoogleGenerativeAI(
