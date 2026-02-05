@@ -43,4 +43,4 @@ class HealthCheck(BaseModel):
     discord_bot: bool
     github_connected: bool
     ai_connected: bool
-    memory_connected: bool
+    memory_connected: bool = False  # Deprecated, kept for API compatibility

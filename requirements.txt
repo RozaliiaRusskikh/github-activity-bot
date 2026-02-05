@@ -14,9 +14,6 @@ langchain-google-genai==2.0.6
 langgraph==0.2.45
 langchain-community==0.3.13
 
-# Supermemory (mem0ai)
-mem0ai==0.1.30
-
 # Pydantic
 pydantic==2.10.3
 pydantic-settings==2.6.1

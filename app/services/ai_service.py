@@ -1,3 +1,4 @@
+import asyncio
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from app.models import GitHubData
@@ -9,15 +10,21 @@ logger = setup_logger(__name__)
 
 class AIService:
     def __init__(self):
+        # Use gemini-pro which is the stable, widely available model
+        # Alternative models: gemini-1.5-pro, gemini-1.5-flash (if available)
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-pro", google_api_key=settings.google_api_key, temperature=0.7
+            model="gemini-2.5-flash", google_api_key=settings.google_api_key, temperature=0.7, version="v1"
         )
         logger.info("🤖 AI Service initialized with Google Gemini Pro")
 
-    def answer_question(self, question: str, github_data: GitHubData) -> str:
+    async def answer_question(self, question: str, github_data: GitHubData) -> str:
         """Use LangChain with Gemini to answer based on GitHub data"""
 
         logger.info(f"Processing question: {question[:50]}...")
+
+        if not github_data or not github_data.commits:
+            logger.warning("No GitHub data or commits provided")
+            return "No recent commits found."
 
         context = "\n".join(
             [
@@ -48,9 +55,17 @@ class AIService:
 
         try:
             logger.debug("Sending request to Gemini API")
-            response = self.llm.invoke(messages)
+            # Run blocking LLM call in thread pool to avoid blocking event loop
+            # Add timeout for AI API calls (30 seconds)
+            response = await asyncio.wait_for(
+                asyncio.to_thread(self.llm.invoke, messages),
+                timeout=30.0
+            )
             logger.info("Successfully received response from Gemini")
             return response.content
+        except asyncio.TimeoutError:
+            logger.error("Gemini API call timed out")
+            raise Exception("AI service request timed out. Please try again.")
         except Exception as e:
             logger.error(f"Error calling Gemini API: {e}")
             raise
