@@ -23,6 +23,7 @@ class MemoryService:
 
     def __init__(self):
         """Initialize mem0 with local storage"""
+        # Configure mem0 with HuggingFace embeddings and Google Gemini LLM
         config = {
             "version": "v1.1",
             "embedder": {
@@ -31,19 +32,40 @@ class MemoryService:
                     "model": "sentence-transformers/all-MiniLM-L6-v2"  # Free, fast model
                 },
             },
+            "llm": {
+                "provider": "google",
+                "config": {
+                    "model": "gemini-pro",
+                    "api_key": settings.google_api_key,
+                },
+            },
         }
 
         try:
             self.memory = Memory.from_config(config)
-            logger.info("Memory service initialized (mem0 with HuggingFace embeddings)")
+            logger.info("Memory service initialized (mem0 with HuggingFace embeddings + Google Gemini LLM)")
         except Exception as e:
             logger.warning(
-                f"Failed to initialize with HuggingFace, trying simpler config: {e}"
+                f"Failed to initialize with Google Gemini LLM: {e}"
             )
-            # Fallback to basic config
-            config = {"version": "v1.1"}
-            self.memory = Memory.from_config(config)
-            logger.info("Memory service initialized (mem0 with default embeddings)")
+            # Fallback: Try without LLM (mem0 might work for basic operations)
+            try:
+                config_no_llm = {
+                    "version": "v1.1",
+                    "embedder": {
+                        "provider": "huggingface",
+                        "config": {
+                            "model": "sentence-transformers/all-MiniLM-L6-v2"
+                        },
+                    },
+                }
+                self.memory = Memory.from_config(config_no_llm)
+                logger.info("Memory service initialized (mem0 with HuggingFace, no LLM)")
+            except Exception as e2:
+                logger.error(f"Failed to initialize memory service: {e2}")
+                # Make memory service optional - set to None and handle gracefully
+                logger.warning("Memory service will be disabled - app will continue without memory features")
+                self.memory = None
 
         # Initialize LLM for content filtering (Layer 2)
         self.filter_llm = ChatGoogleGenerativeAI(
@@ -133,6 +155,10 @@ DO NOT STORE if it's:
         Returns:
             dict with success status and filter decision
         """
+        if self.memory is None:
+            logger.warning("Memory service not initialized - skipping memory storage")
+            return {"success": False, "error": "Memory service not available"}
+        
         try:
             # Build container tags following naming convention
             container_tags = self._build_container_tags(user_id)
@@ -196,6 +222,10 @@ DO NOT STORE if it's:
             user_id: User identifier
             limit: Maximum number of memories to retrieve
         """
+        if self.memory is None:
+            logger.warning("Memory service not initialized - returning empty history")
+            return []
+        
         try:
             # Build container tags for scoped access
             container_tags = self._build_container_tags(user_id)
@@ -226,6 +256,10 @@ DO NOT STORE if it's:
             query: Search query
             limit: Maximum results
         """
+        if self.memory is None:
+            logger.warning("Memory service not initialized - returning empty search results")
+            return []
+        
         try:
             logger.info(
                 f"Searching memories for user {user_id}, query: {query[:50]}..."
@@ -243,6 +277,10 @@ DO NOT STORE if it's:
 
     def health_check(self) -> bool:
         """Check if memory service works"""
+        if self.memory is None:
+            logger.warning("Memory service not initialized - health check failed")
+            return False
+        
         try:
             # Simple health check
             test_metadata = {
