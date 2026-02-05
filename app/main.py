@@ -14,7 +14,7 @@ logger = setup_logger(__name__)
 # ===== DISCORD BOT =====
 intents = discord.Intents.default()
 intents.message_content = True
-bot = discord.Bot(intents=intents)
+bot = discord.Client(intents=intents)
 
 # ===== FASTAPI =====
 
@@ -97,67 +97,67 @@ async def on_ready():
 
 
 @bot.event
-async def on_application_command(ctx):
-    logger.info(
-        f"Command /{ctx.command.name} invoked by {ctx.author} (ID: {ctx.author.id})"
-    )
-
-
-@bot.event
-async def on_application_command_error(ctx, error):
-    logger.error(f"Command error in /{ctx.command.name}: {error}")
-    await ctx.respond(f"❌ An error occurred: {str(error)}")
-
-
-@bot.slash_command(name="ask", description="Ask about GitHub activity")
-async def ask_cmd(ctx, question: str):
-    await ctx.defer()
-    logger.info(f"User {ctx.author} asked: {question[:50]}...")
-
-    try:
-        initial_state: PipelineState = {
-            "question": question,
-            "user_id": str(ctx.author.id),
-            "github_data": None,
-            "answer": None,
-            "commits_analyzed": 0,
-            "error": None,
-        }
-
-        config = {"configurable": {"thread_id": str(ctx.author.id)}}
-        
-        # Add timeout to prevent indefinite hanging (60 seconds)
+async def on_message(message: discord.Message):
+    """Handle regular messages instead of slash commands"""
+    # Ignore messages from bots (including ourselves)
+    if message.author.bot:
+        return
+    
+    # Process all messages - use the message content as the question
+    question = message.content.strip()
+    
+    # If message is empty, use a default
+    if not question:
+        question = "What are my recent commits?"
+    
+    logger.info(f"User {message.author} asked: {question[:50]}...")
+    
+    # Send typing indicator
+    async with message.channel.typing():
         try:
-            result = await asyncio.wait_for(
-                pipeline_graph.ainvoke(initial_state, config),
-                timeout=60.0
+            initial_state: PipelineState = {
+                "question": question.strip(),
+                "user_id": str(message.author.id),
+                "github_data": None,
+                "answer": None,
+                "commits_analyzed": 0,
+                "error": None,
+            }
+
+            config = {"configurable": {"thread_id": str(message.author.id)}}
+            
+            # Add timeout to prevent indefinite hanging (60 seconds)
+            try:
+                result = await asyncio.wait_for(
+                    pipeline_graph.ainvoke(initial_state, config),
+                    timeout=60.0
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Pipeline timeout for user {message.author.id}")
+                await message.reply("❌ Request timed out. Please try again.")
+                return
+
+            if result.get("error"):
+                logger.warning(f"Pipeline returned error for user {message.author.id}")
+                await message.reply(f"❌ Error: {result['error']}")
+                return
+
+            if result.get("commits_analyzed", 0) == 0:
+                logger.info(f"No commits found for user {message.author.id}")
+                await message.reply("❌ No commits in last 24 hours!")
+                return
+
+            logger.info(f"Successfully answered question for user {message.author.id}")
+            await message.reply(
+                f"📊 **Analyzed {result['commits_analyzed']} commits**\n\n{result['answer']}"
             )
         except asyncio.TimeoutError:
-            logger.error(f"Pipeline timeout for user {ctx.author.id}")
-            await ctx.respond("❌ Request timed out. Please try again.")
-            return
-
-        if result.get("error"):
-            logger.warning(f"Pipeline returned error for user {ctx.author.id}")
-            await ctx.respond(f"❌ Error: {result['error']}")
-            return
-
-        if result.get("commits_analyzed", 0) == 0:
-            logger.info(f"No commits found for user {ctx.author.id}")
-            await ctx.respond("❌ No commits in last 24 hours!")
-            return
-
-        logger.info(f"Successfully answered question for user {ctx.author.id}")
-        await ctx.respond(
-            f"📊 **Analyzed {result['commits_analyzed']} commits**\n\n{result['answer']}"
-        )
-    except asyncio.TimeoutError:
-        # Already handled above, but just in case
-        logger.error(f"Timeout in ask command for user {ctx.author.id}")
-        await ctx.respond("❌ Request timed out. Please try again.")
-    except Exception as e:
-        logger.error(f"Error in ask command: {e}", exc_info=True)
-        await ctx.respond(f"❌ Error: {str(e)}")
+            # Already handled above, but just in case
+            logger.error(f"Timeout in message handler for user {message.author.id}")
+            await message.reply("❌ Request timed out. Please try again.")
+        except Exception as e:
+            logger.error(f"Error in message handler: {e}", exc_info=True)
+            await message.reply(f"❌ Error: {str(e)}")
 
 
 # ===== RUN =====
